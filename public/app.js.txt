@@ -1,0 +1,126 @@
+document.addEventListener('DOMContentLoaded', () => {
+  const registerForm = document.getElementById('registerForm');
+  const dispatchBtn = document.getElementById('dispatchBtn');
+  const searchBtn = document.getElementById('searchBtn');
+  const queueList = document.getElementById('queueList');
+  const dispatchLog = document.getElementById('dispatchLog');
+  const searchResult = document.getElementById('searchResult');
+
+  fetchEmergencies();
+
+  registerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      id: document.getElementById('reqId').value,
+      requesterName: document.getElementById('reqName').value,
+      phoneNumber: document.getElementById('reqPhone').value,
+      type: document.getElementById('reqType').value,
+      location: document.getElementById('reqLocation').value,
+      priority: document.getElementById('reqPriority').value,
+      description: document.getElementById('reqDesc').value,
+    };
+
+    try {
+      const res = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        registerForm.reset();
+        fetchEmergencies();
+      } else {
+        alert(data.error);
+      }
+    } catch (err) {
+      alert('Error registering emergency.');
+    }
+  });
+
+  dispatchBtn.addEventListener('click', async () => {
+    try {
+      const res = await fetch('/api/process-next', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        dispatchLog.classList.remove('hidden');
+        dispatchLog.innerHTML = `
+          <strong>[DISPATCHED] Emergency ID #${data.dispatched.id}</strong><br>
+          Type: ${data.dispatched.type} | Priority: ${data.dispatched.priority}<br>
+          Requester: ${data.dispatched.requesterName} (${data.dispatched.phoneNumber})<br>
+          Location: ${data.dispatched.location}
+        `;
+        fetchEmergencies();
+      } else {
+        dispatchLog.classList.remove('hidden');
+        dispatchLog.innerHTML = `<span style="color:var(--danger)">${data.error}</span>`;
+      }
+    } catch (err) {
+      alert('Error processing dispatch.');
+    }
+  });
+
+  searchBtn.addEventListener('click', async () => {
+    const id = document.getElementById('searchIdInput').value;
+    if (!id) return;
+
+    try {
+      const res = await fetch(`/api/search/${id}`);
+      const data = await res.json();
+      searchResult.classList.remove('hidden');
+      if (res.ok) {
+        searchResult.innerHTML = `
+          <strong>ID #${data.id} - ${data.type}</strong> (${data.status})<br>
+          Priority: <span class="priority-tag priority-${data.priority}">${data.priority}</span><br>
+          Requester: ${data.requesterName} (${data.phoneNumber})<br>
+          Location: ${data.location}<br>
+          Details: ${data.description}
+          ${data.status === 'Pending' ? `<br><br><button onclick="cancelRequest(${data.id})" style="color:var(--danger); cursor:pointer;">Cancel Request</button>` : ''}
+        `;
+      } else {
+        searchResult.innerHTML = `<span style="color:var(--danger)">${data.error}</span>`;
+      }
+    } catch (err) {
+      alert('Error searching request.');
+    }
+  });
+
+  async function fetchEmergencies() {
+    try {
+      const res = await fetch('/api/emergencies');
+      const data = await res.json();
+      const pending = data.filter(r => r.status === 'Pending');
+
+      if (pending.length === 0) {
+        queueList.innerHTML = '<p class="empty-state">No active emergency requests.</p>';
+        return;
+      }
+
+      queueList.innerHTML = pending.map(req => `
+        <div class="queue-item">
+          <div>
+            <strong>#${req.id} [${req.type}]</strong> - ${req.requesterName}<br>
+            <small style="color:var(--text-muted)">${req.location}</small>
+          </div>
+          <span class="priority-tag priority-${req.priority}">${req.priority}</span>
+        </div>
+      `).join('');
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  window.cancelRequest = async function(id) {
+    if (!confirm(`Cancel Emergency ID #${id}?`)) return;
+    try {
+      const res = await fetch(`/api/cancel/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      alert(data.message || data.error);
+      searchResult.classList.add('hidden');
+      fetchEmergencies();
+    } catch (err) {
+      alert('Error cancelling request.');
+    }
+  };
+});
