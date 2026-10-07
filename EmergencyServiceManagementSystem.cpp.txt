@@ -1,0 +1,535 @@
+/**
+ * ============================================================================
+ * Project Title : Emergency Service Management System
+ * Course        : Data Structures and Algorithms (DSA)
+ * File Name     : EmergencyServiceManagementSystem.cpp
+ * Language      : Standard C++ (C++11 or later)
+ * ============================================================================
+ * Description:
+ * A C++ console application for managing emergency requests across Medical,
+ * Fire, and Police departments. Demonstrates core DSA concepts:
+ *   - Structs (Data bundling)
+ *   - Queues (FIFO queue management per emergency category)
+ *   - Vectors / Dynamic Arrays (Centralized record persistence & searching)
+ *   - Strings (Text processing and metadata)
+ *   - Modular Functions (Separation of concerns and input validation)
+ * ============================================================================
+ */
+
+#include <iostream>
+#include <string>
+#include <vector>
+#include <queue>
+#include <iomanip>
+#include <limits>
+#include <algorithm>
+
+// ANSI Escape Codes for Styled Console Output
+namespace Color {
+    const std::string RESET   = "\033[0m";
+    const std::string BOLD    = "\033[1m";
+    const std::string RED     = "\033[31m";
+    const std::string GREEN   = "\033[32m";
+    const std::string YELLOW  = "\033[33m";
+    const std::string BLUE    = "\033[34m";
+    const std::string MAGENTA = "\033[35m";
+    const std::string CYAN    = "\033[36m";
+    const std::string WHITE   = "\033[37m";
+}
+
+// ============================================================================
+// DATA STRUCTURE DEFINITION
+// ============================================================================
+
+/**
+ * @brief Struct representing an emergency service request record.
+ */
+struct EmergencyRequest {
+    int id;
+    std::string requesterName;
+    std::string phoneNumber;
+    std::string type;        // "Medical", "Fire", "Police"
+    std::string location;
+    std::string description;
+    std::string priority;    // "Critical", "High", "Normal"
+    std::string status;      // "Pending", "Processed", "Cancelled"
+};
+
+// ============================================================================
+// CLASS MANAGEMENT SYSTEM
+// ============================================================================
+
+class EmergencyServiceManager {
+private:
+    // STL Vector for full record registry and quick direct lookup
+    std::vector<EmergencyRequest> registry;
+
+    // Separate STL Queues for department-specific request routing (FIFO)
+    std::queue<int> medicalQueue;
+    std::queue<int> fireQueue;
+    std::queue<int> policeQueue;
+
+    // Helper method to convert Priority string to numerical rank (1 = Highest)
+    int getPriorityRank(const std::string& priority) const {
+        if (priority == "Critical") return 1;
+        if (priority == "High")     return 2;
+        if (priority == "Normal")   return 3;
+        return 4;
+    }
+
+    // Helper method to find pointer to record by ID
+    EmergencyRequest* findRecordById(int id) {
+        for (auto& request : registry) {
+            if (request.id == id) {
+                return &request;
+            }
+        }
+        return nullptr;
+    }
+
+    // Helper method to check if ID already exists
+    bool isDuplicateId(int id) const {
+        for (const auto& request : registry) {
+            if (request.id == id) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Input Sanitization Helpers
+    int getValidIntInput(const std::string& prompt) {
+        int val;
+        while (true) {
+            std::cout << prompt;
+            if (std::cin >> val) {
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                return val;
+            } else {
+                std::cout << Color::RED << "Error: Invalid numeric input. Please try again.\n" << Color::RESET;
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            }
+        }
+    }
+
+    std::string getNonEmptyString(const std::string& prompt) {
+        std::string input;
+        while (true) {
+            std::cout << prompt;
+            std::getline(std::cin, input);
+            if (!input.empty()) {
+                return input;
+            }
+            std::cout << Color::RED << "Error: Input field cannot be empty.\n" << Color::RESET;
+        }
+    }
+
+    // Dynamic queue cleanup helper
+    void purgeInactiveHead(std::queue<int>& q) {
+        while (!q.empty()) {
+            EmergencyRequest* req = findRecordById(q.front());
+            if (req == nullptr || req->status != "Pending") {
+                q.pop(); // Remove non-pending or cancelled request IDs from front
+            } else {
+                break;
+            }
+        }
+    }
+
+public:
+    // ========================================================================
+    // FEATURE 1: REGISTER EMERGENCY REQUEST
+    // ========================================================================
+    void registerEmergency() {
+        std::cout << "\n" << Color::CYAN << Color::BOLD 
+                  << "--- REGISTER NEW EMERGENCY REQUEST ---" << Color::RESET << "\n";
+
+        int id;
+        while (true) {
+            id = getValidIntInput("Enter Unique Emergency ID: ");
+            if (id <= 0) {
+                std::cout << Color::RED << "Error: Emergency ID must be a positive integer.\n" << Color::RESET;
+            } else if (isDuplicateId(id)) {
+                std::cout << Color::RED << "Error: Request ID " << id << " already exists. Enter a unique ID.\n" << Color::RESET;
+            } else {
+                break;
+            }
+        }
+
+        std::string name  = getNonEmptyString("Enter Requester Name: ");
+        std::string phone = getNonEmptyString("Enter Contact Phone Number: ");
+
+        std::cout << "Select Emergency Type:\n";
+        std::cout << "  1. Medical\n";
+        std::cout << "  2. Fire\n";
+        std::cout << "  3. Police\n";
+        int typeChoice = 0;
+        while (typeChoice < 1 || typeChoice > 3) {
+            typeChoice = getValidIntInput("Enter Type Choice (1-3): ");
+            if (typeChoice < 1 || typeChoice > 3) {
+                std::cout << Color::RED << "Error: Invalid selection. Enter 1, 2, or 3.\n" << Color::RESET;
+            }
+        }
+
+        std::string typeStr;
+        if (typeChoice == 1)      typeStr = "Medical";
+        else if (typeChoice == 2) typeStr = "Fire";
+        else                      typeStr = "Police";
+
+        std::string location    = getNonEmptyString("Enter Incident Location: ");
+        std::string description = getNonEmptyString("Enter Incident Description: ");
+
+        std::cout << "Select Priority Level:\n";
+        std::cout << "  1. Critical\n";
+        std::cout << "  2. High\n";
+        std::cout << "  3. Normal\n";
+        int priorityChoice = 0;
+        while (priorityChoice < 1 || priorityChoice > 3) {
+            priorityChoice = getValidIntInput("Enter Priority Choice (1-3): ");
+            if (priorityChoice < 1 || priorityChoice > 3) {
+                std::cout << Color::RED << "Error: Invalid choice. Select 1, 2, or 3.\n" << Color::RESET;
+            }
+        }
+
+        std::string priorityStr;
+        if (priorityChoice == 1)      priorityStr = "Critical";
+        else if (priorityChoice == 2) priorityStr = "High";
+        else                          priorityStr = "Normal";
+
+        // Construct emergency object
+        EmergencyRequest req = {
+            id, name, phone, typeStr, location, description, priorityStr, "Pending"
+        };
+
+        // Add to main repository vector
+        registry.push_back(req);
+
+        // Enqueue into department queue
+        if (typeStr == "Medical") {
+            medicalQueue.push(id);
+        } else if (typeStr == "Fire") {
+            fireQueue.push(id);
+        } else if (typeStr == "Police") {
+            policeQueue.push(id);
+        }
+
+        std::cout << Color::GREEN << Color::BOLD 
+                  << "\n[SUCCESS] Emergency request ID " << id << " registered and queued successfully.\n" 
+                  << Color::RESET;
+    }
+
+    // ========================================================================
+    // FEATURE 2: DISPLAY PENDING REQUESTS
+    // ========================================================================
+    void displayPendingRequests() {
+        std::cout << "\n" << Color::CYAN << Color::BOLD 
+                  << "--- ALL PENDING EMERGENCY REQUESTS ---" << Color::RESET << "\n";
+
+        bool hasPending = false;
+        std::cout << std::left 
+                  << std::setw(8)  << "ID"
+                  << std::setw(12) << "Type"
+                  << std::setw(12) << "Priority"
+                  << std::setw(20) << "Requester"
+                  << std::setw(15) << "Phone"
+                  << std::setw(20) << "Location" << "\n";
+        std::cout << std::string(87, '-') << "\n";
+
+        for (const auto& req : registry) {
+            if (req.status == "Pending") {
+                hasPending = true;
+                std::cout << std::left 
+                          << std::setw(8)  << req.id
+                          << std::setw(12) << req.type
+                          << std::setw(12) << req.priority
+                          << std::setw(20) << req.requesterName
+                          << std::setw(15) << req.phoneNumber
+                          << std::setw(20) << req.location << "\n";
+            }
+        }
+
+        if (!hasPending) {
+            std::cout << Color::YELLOW << "No pending emergency requests." << Color::RESET << "\n";
+        }
+    }
+
+    // ========================================================================
+    // FEATURE 3: PROCESS NEXT EMERGENCY (Priority-Driven Dispatch Algorithm)
+    // ========================================================================
+    void processNextEmergency() {
+        std::cout << "\n" << Color::CYAN << Color::BOLD 
+                  << "--- DISPATCH / PROCESS NEXT EMERGENCY ---" << Color::RESET << "\n";
+
+        // Clean up stale or cancelled items from fronts of all queues
+        purgeInactiveHead(medicalQueue);
+        purgeInactiveHead(fireQueue);
+        purgeInactiveHead(policeQueue);
+
+        // EDGE CASE 1 Check: Verify if any pending requests exist
+        if (medicalQueue.empty() && fireQueue.empty() && policeQueue.empty()) {
+            std::cout << Color::YELLOW << "No pending emergency requests." << Color::RESET << "\n";
+            return;
+        }
+
+        // Candidates selection from the front of each non-empty queue
+        EmergencyRequest* bestCandidate = nullptr;
+        int bestQueueType = 0; // 1 = Medical, 2 = Fire, 3 = Police
+
+        auto inspectCandidate = [&](std::queue<int>& q, int qType) {
+            if (!q.empty()) {
+                EmergencyRequest* candidate = findRecordById(q.front());
+                if (candidate != nullptr && candidate->status == "Pending") {
+                    if (bestCandidate == nullptr) {
+                        bestCandidate = candidate;
+                        bestQueueType = qType;
+                    } else {
+                        int currentBestRank = getPriorityRank(bestCandidate->priority);
+                        int candidateRank   = getPriorityRank(candidate->priority);
+
+                        // 1. Higher priority tier takes precedence
+                        if (candidateRank < currentBestRank) {
+                            bestCandidate = candidate;
+                            bestQueueType = qType;
+                        } 
+                        // 2. FIFO tie-breaker: Compare arrival order via ID
+                        else if (candidateRank == currentBestRank) {
+                            if (candidate->id < bestCandidate->id) {
+                                bestCandidate = candidate;
+                                bestQueueType = qType;
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        inspectCandidate(medicalQueue, 1);
+        inspectCandidate(fireQueue, 2);
+        inspectCandidate(policeQueue, 3);
+
+        if (bestCandidate == nullptr) {
+            std::cout << Color::YELLOW << "No pending emergency requests." << Color::RESET << "\n";
+            return;
+        }
+
+        // Dequeue from winning department queue
+        if (bestQueueType == 1)      medicalQueue.pop();
+        else if (bestQueueType == 2) fireQueue.pop();
+        else if (bestQueueType == 3) policeQueue.pop();
+
+        // Update record status
+        bestCandidate->status = "Processed";
+
+        std::cout << Color::GREEN << Color::BOLD 
+                  << "[DISPATCHED] Emergency ID " << bestCandidate->id 
+                  << " [" << bestCandidate->type << " - Priority: " << bestCandidate->priority << "] "
+                  << "has been processed successfully!\n" << Color::RESET;
+        std::cout << "  Requester : " << bestCandidate->requesterName << "\n";
+        std::cout << "  Location  : " << bestCandidate->location << "\n";
+        std::cout << "  Details   : " << bestCandidate->description << "\n";
+    }
+
+    // ========================================================================
+    // FEATURE 4: SEARCH EMERGENCY BY ID
+    // ========================================================================
+    void searchEmergencyById() {
+        std::cout << "\n" << Color::CYAN << Color::BOLD 
+                  << "--- SEARCH EMERGENCY BY ID ---" << Color::RESET << "\n";
+
+        int id = getValidIntInput("Enter Emergency ID to search: ");
+        EmergencyRequest* req = findRecordById(id);
+
+        // EDGE CASE 2 Check: Non-existent ID handling
+        if (req == nullptr) {
+            std::cout << Color::RED << "Emergency request not found." << Color::RESET << "\n";
+            return;
+        }
+
+        std::cout << Color::GREEN << "Emergency Record Found:\n" << Color::RESET;
+        std::cout << "  ID           : " << req->id << "\n";
+        std::cout << "  Type         : " << req->type << "\n";
+        std::cout << "  Priority     : " << req->priority << "\n";
+        std::cout << "  Status       : " << req->status << "\n";
+        std::cout << "  Requester    : " << req->requesterName << "\n";
+        std::cout << "  Phone        : " << req->phoneNumber << "\n";
+        std::cout << "  Location     : " << req->location << "\n";
+    }
+
+    // ========================================================================
+    // FEATURE 5: DISPLAY COMPLETE EMERGENCY DETAILS
+    // ========================================================================
+    void displayEmergencyDetails() {
+        std::cout << "\n" << Color::CYAN << Color::BOLD 
+                  << "--- DISPLAY COMPLETE EMERGENCY DETAILS ---" << Color::RESET << "\n";
+
+        int id = getValidIntInput("Enter Emergency ID to view full details: ");
+        EmergencyRequest* req = findRecordById(id);
+
+        if (req == nullptr) {
+            std::cout << Color::RED << "Emergency request not found." << Color::RESET << "\n";
+            return;
+        }
+
+        std::cout << "==================================================\n";
+        std::cout << "            EMERGENCY DOSSIER #" << req->id << "\n";
+        std::cout << "==================================================\n";
+        std::cout << "  Status       : " << req->status << "\n";
+        std::cout << "  Service Type : " << req->type << "\n";
+        std::cout << "  Priority     : " << req->priority << "\n";
+        std::cout << "  Requester    : " << req->requesterName << "\n";
+        std::cout << "  Contact No.  : " << req->phoneNumber << "\n";
+        std::cout << "  Location     : " << req->location << "\n";
+        std::cout << "  Description  : " << req->description << "\n";
+        std::cout << "==================================================\n";
+    }
+
+    // ========================================================================
+    // FEATURE 6: UPDATE EMERGENCY REQUEST
+    // ========================================================================
+    void updateEmergency() {
+        std::cout << "\n" << Color::CYAN << Color::BOLD 
+                  << "--- UPDATE EMERGENCY REQUEST ---" << Color::RESET << "\n";
+
+        int id = getValidIntInput("Enter Emergency ID to update: ");
+        EmergencyRequest* req = findRecordById(id);
+
+        if (req == nullptr) {
+            std::cout << Color::RED << "Emergency request not found." << Color::RESET << "\n";
+            return;
+        }
+
+        if (req->status != "Pending") {
+            std::cout << Color::RED 
+                      << "Error: Cannot update request with status '" << req->status << "'. "
+                      << "Only 'Pending' requests can be updated.\n" << Color::RESET;
+            return;
+        }
+
+        std::cout << "\nUpdating Emergency ID #" << req->id << " (Press Enter to keep existing value):\n";
+
+        std::cout << "Current Requester Name [" << req->requesterName << "]: ";
+        std::string newName;
+        std::getline(std::cin, newName);
+        if (!newName.empty()) req->requesterName = newName;
+
+        std::cout << "Current Contact Phone [" << req->phoneNumber << "]: ";
+        std::string newPhone;
+        std::getline(std::cin, newPhone);
+        if (!newPhone.empty()) req->phoneNumber = newPhone;
+
+        std::cout << "Current Location [" << req->location << "]: ";
+        std::string newLocation;
+        std::getline(std::cin, newLocation);
+        if (!newLocation.empty()) req->location = newLocation;
+
+        std::cout << "Current Description [" << req->description << "]: ";
+        std::string newDesc;
+        std::getline(std::cin, newDesc);
+        if (!newDesc.empty()) req->description = newDesc;
+
+        std::cout << "Update Priority? (1: Critical, 2: High, 3: Normal, 0: Keep Current [" << req->priority << "]): ";
+        int prChoice = getValidIntInput("");
+        if (prChoice == 1)      req->priority = "Critical";
+        else if (prChoice == 2) req->priority = "High";
+        else if (prChoice == 3) req->priority = "Normal";
+
+        std::cout << Color::GREEN << "[SUCCESS] Emergency request ID " << id << " updated successfully.\n" << Color::RESET;
+    }
+
+    // ========================================================================
+    // FEATURE 7: CANCEL/DELETE EMERGENCY REQUEST
+    // ========================================================================
+    void cancelEmergency() {
+        std::cout << "\n" << Color::CYAN << Color::BOLD 
+                  << "--- CANCEL EMERGENCY REQUEST ---" << Color::RESET << "\n";
+
+        int id = getValidIntInput("Enter Emergency ID to cancel: ");
+        EmergencyRequest* req = findRecordById(id);
+
+        if (req == nullptr) {
+            std::cout << Color::RED << "Emergency request not found." << Color::RESET << "\n";
+            return;
+        }
+
+        if (req->status == "Processed") {
+            std::cout << Color::RED << "Error: Cannot cancel an emergency request that has already been processed.\n" << Color::RESET;
+            return;
+        }
+
+        if (req->status == "Cancelled") {
+            std::cout << Color::YELLOW << "Request ID " << id << " is already cancelled.\n" << Color::RESET;
+            return;
+        }
+
+        req->status = "Cancelled";
+        std::cout << Color::GREEN << "[SUCCESS] Emergency request ID " << id << " marked as Cancelled.\n" << Color::RESET;
+    }
+};
+
+// ============================================================================
+// MAIN APPLICATION ENTRY POINT
+// ============================================================================
+
+int main() {
+    EmergencyServiceManager systemManager;
+    int choice = 0;
+
+    while (true) {
+        std::cout << "\n" << Color::CYAN << Color::BOLD
+                  << "==================================================\n"
+                  << "       EMERGENCY SERVICE MANAGEMENT SYSTEM        \n"
+                  << "==================================================\n"
+                  << Color::RESET;
+        std::cout << "1. Register Emergency Request\n";
+        std::cout << "2. Display Pending Requests\n";
+        std::cout << "3. Process Next Emergency\n";
+        std::cout << "4. Search Emergency by ID\n";
+        std::cout << "5. Display Emergency Details\n";
+        std::cout << "6. Update Emergency\n";
+        std::cout << "7. Cancel Emergency\n";
+        std::cout << "8. Exit\n";
+        std::cout << "==================================================\n";
+
+        std::cout << "Enter your choice: ";
+        if (!(std::cin >> choice)) {
+            std::cout << Color::RED << "Invalid menu choice! Please enter a number between 1 and 8.\n" << Color::RESET;
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            continue;
+        }
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+        switch (choice) {
+            case 1:
+                systemManager.registerEmergency();
+                break;
+            case 2:
+                systemManager.displayPendingRequests();
+                break;
+            case 3:
+                systemManager.processNextEmergency();
+                break;
+            case 4:
+                systemManager.searchEmergencyById();
+                break;
+            case 5:
+                systemManager.displayEmergencyDetails();
+                break;
+            case 6:
+                systemManager.updateEmergency();
+                break;
+            case 7:
+                systemManager.cancelEmergency();
+                break;
+            case 8:
+                std::cout << Color::GREEN << "\nThank you for using Emergency Service Management System. Exiting...\n" << Color::RESET;
+                return 0;
+            default:
+                std::cout << Color::RED << "Invalid option! Please enter a choice from 1 to 8.\n" << Color::RESET;
+                break;
+        }
+    }
+
+    return 0;
+}

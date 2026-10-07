@@ -1,0 +1,174 @@
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// In-Memory Repository & Department Queues
+let registry = [];
+let medicalQueue = [];
+let fireQueue = [];
+let policeQueue = [];
+
+// Helper: Priority Rank (1 = Critical, 2 = High, 3 = Normal)
+function getPriorityRank(priority) {
+  if (priority === 'Critical') return 1;
+  if (priority === 'High') return 2;
+  if (priority === 'Normal') return 3;
+  return 4;
+}
+
+// Clean up cancelled or already processed IDs at queue front
+function purgeInactiveHead(queue) {
+  while (queue.length > 0) {
+    const headId = queue[0];
+    const record = registry.find(r => r.id === headId);
+    if (!record || record.status !== 'Pending') {
+      queue.shift();
+    } else {
+      break;
+    }
+  }
+}
+
+// GET all requests
+app.get('/api/emergencies', (req, res) => {
+  res.json(registry);
+});
+
+// POST Register new emergency
+app.post('/api/register', (req, res) => {
+  const { id, requesterName, phoneNumber, type, location, description, priority } = req.body;
+
+  const numId = parseInt(id);
+  if (!numId || numId <= 0) {
+    return res.status(400).json({ error: 'Emergency ID must be a positive number.' });
+  }
+
+  if (registry.some(r => r.id === numId)) {
+    return res.status(400).json({ error: `Request ID ${numId} already exists.` });
+  }
+
+  if (!requesterName || !phoneNumber || !type || !location || !priority) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+
+  const newRequest = {
+    id: numId,
+    requesterName,
+    phoneNumber,
+    type,
+    location,
+    description: description || 'N/A',
+    priority,
+    status: 'Pending',
+    createdAt: new Date().toLocaleTimeString()
+  };
+
+  registry.push(newRequest);
+
+  if (type === 'Medical') medicalQueue.push(numId);
+  else if (type === 'Fire') fireQueue.push(numId);
+  else if (type === 'Police') policeQueue.push(numId);
+
+  res.status(201).json({ message: 'Emergency registered successfully.', request: newRequest });
+});
+
+// POST Process next emergency (Priority Queue Triage)
+app.post('/api/process-next', (req, res) => {
+  purgeInactiveHead(medicalQueue);
+  purgeInactiveHead(fireQueue);
+  purgeInactiveHead(policeQueue);
+
+  if (medicalQueue.length === 0 && fireQueue.length === 0 && policeQueue.length === 0) {
+    return res.status(400).json({ error: 'No pending emergency requests.' });
+  }
+
+  let candidates = [];
+  if (medicalQueue.length > 0) candidates.push({ queue: 'Medical', id: medicalQueue[0] });
+  if (fireQueue.length > 0) candidates.push({ queue: 'Fire', id: fireQueue[0] });
+  if (policeQueue.length > 0) candidates.push({ queue: 'Police', id: policeQueue[0] });
+
+  let bestCandidate = null;
+
+  candidates.forEach(cand => {
+    const record = registry.find(r => r.id === cand.id);
+    if (record) {
+      if (!bestCandidate) {
+        bestCandidate = { record, queue: cand.queue };
+      } else {
+        const bestRank = getPriorityRank(bestCandidate.record.priority);
+        const candRank = getPriorityRank(record.priority);
+
+        if (candRank < bestRank) {
+          bestCandidate = { record, queue: cand.queue };
+        } else if (candRank === bestRank && record.id < bestCandidate.record.id) {
+          bestCandidate = { record, queue: cand.queue };
+        }
+      }
+    }
+  });
+
+  if (!bestCandidate) {
+    return res.status(400).json({ error: 'No pending emergency requests.' });
+  }
+
+  if (bestCandidate.queue === 'Medical') medicalQueue.shift();
+  else if (bestCandidate.queue === 'Fire') fireQueue.shift();
+  else if (bestCandidate.queue === 'Police') policeQueue.shift();
+
+  bestCandidate.record.status = 'Processed';
+  res.json({ message: 'Request processed successfully.', dispatched: bestCandidate.record });
+});
+
+// GET Search by ID
+app.get('/api/search/:id', (req, res) => {
+  const record = registry.find(r => r.id === parseInt(req.params.id));
+  if (!record) {
+    return res.status(404).json({ error: 'Emergency request not found.' });
+  }
+  res.json(record);
+});
+
+// PUT Update request
+app.put('/api/update/:id', (req, res) => {
+  const record = registry.find(r => r.id === parseInt(req.params.id));
+  if (!record) {
+    return res.status(404).json({ error: 'Emergency request not found.' });
+  }
+  if (record.status !== 'Pending') {
+    return res.status(400).json({ error: `Cannot update a request with status '${record.status}'.` });
+  }
+
+  const { requesterName, phoneNumber, location, description, priority } = req.body;
+  if (requesterName) record.requesterName = requesterName;
+  if (phoneNumber) record.phoneNumber = phoneNumber;
+  if (location) record.location = location;
+  if (description) record.description = description;
+  if (priority) record.priority = priority;
+
+  res.json({ message: 'Emergency request updated successfully.', request: record });
+});
+
+// DELETE Cancel request
+app.delete('/api/cancel/:id', (req, res) => {
+  const record = registry.find(r => r.id === parseInt(req.params.id));
+  if (!record) {
+    return res.status(404).json({ error: 'Emergency request not found.' });
+  }
+  if (record.status === 'Processed') {
+    return res.status(400).json({ error: 'Cannot cancel an emergency request that has already been processed.' });
+  }
+
+  record.status = 'Cancelled';
+  res.json({ message: `Emergency ID #${record.id} marked as Cancelled.` });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
