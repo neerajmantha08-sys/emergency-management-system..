@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emergency Service Management System</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="background-grid"></div>
+  
+  <div class="container">
+    <header class="header">
+      <div class="badge">
+        <span class="badge-dot"></span> DSA QUEUE DISPATCH SYSTEM
+      </div>
+      <h1>Emergency Service Management</h1>
+      <p class="subtitle">Real-time triage and dispatch center powered by FIFO priority queue algorithms.</p>
+    </header>
+
+    <div class="dashboard-grid">
+      <!-- Left Column: Registration & Controls -->
+      <div class="column">
+        <div class="card">
+          <h2>Register Emergency Request</h2>
+          <form id="registerForm">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Emergency ID</label>
+                <input type="number" id="reqId" placeholder="e.g. 101" required>
+              </div>
+              <div class="form-group">
+                <label>Requester Name</label>
+                <input type="text" id="reqName" placeholder="Full Name" required>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Phone Number</label>
+                <input type="text" id="reqPhone" placeholder="Contact No." required>
+              </div>
+              <div class="form-group">
+                <label>Emergency Type</label>
+                <select id="reqType" required>
+                  <option value="Medical">Medical</option>
+                  <option value="Fire">Fire</option>
+                  <option value="Police">Police</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Location</label>
+              <input type="text" id="reqLocation" placeholder="Incident Location" required>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Priority Tier</label>
+                <select id="reqPriority" required>
+                  <option value="Critical">Critical (Highest)</option>
+                  <option value="High">High</option>
+                  <option value="Normal">Normal</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Description</label>
+              <textarea id="reqDesc" rows="2" placeholder="Brief situation details..."></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Register Request</button>
+          </form>
+        </div>
+
+        <div class="card dispatch-card">
+          <h2>Dispatch Controller</h2>
+          <p>Triggers multi-queue priority sorting to process the highest urgency incident.</p>
+          <button id="dispatchBtn" class="btn btn-accent">Process Next Emergency</button>
+          <div id="dispatchLog" class="dispatch-log hidden"></div>
+        </div>
+      </div>
+
+      <!-- Right Column: Live Queues & Search -->
+      <div class="column">
+        <div class="card">
+          <div class="card-header">
+            <h2>Lookup & Actions</h2>
+          </div>
+          <div class="search-box">
+            <input type="number" id="searchIdInput" placeholder="Enter Request ID...">
+            <button id="searchBtn" class="btn btn-secondary">Search</button>
+          </div>
+          <div id="searchResult" class="search-result hidden"></div>
+        </div>
+
+        <div class="card">
+          <h2>Active Queue Dashboard</h2>
+          <div id="queueList" class="queue-list">
+            <p class="empty-state">No active emergency requests.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
